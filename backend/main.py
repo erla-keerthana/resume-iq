@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from dotenv import load_dotenv
@@ -16,7 +16,7 @@ from ai_service import (
     analyze_skill_gap,
 )
 from database import get_db, init_db
-from models import AnalysisHistory
+from models import AnalysisHistory, User
 from auth_service import (
     create_token,
     signup_user,
@@ -36,8 +36,14 @@ def on_startup():
 
 
 # CORS
-_origins_env = os.getenv("ALLOWED_ORIGINS", "")
-ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] if _origins_env else ["*"]
+_origins_env = os.getenv("ALLOWED_ORIGINS")
+if not _origins_env or not _origins_env.strip():
+    raise RuntimeError(
+        "ALLOWED_ORIGINS environment variable is not set. "
+        "Set it to a comma-separated list of allowed origins in backend/.env "
+        "(e.g. ALLOWED_ORIGINS=http://10.10.0.36:5174)."
+    )
+ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,9 +103,9 @@ def health_check():
 
 @app.post("/upload")
 async def upload_resume(
-    request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     file_bytes = await _read_and_validate_file(file)
@@ -113,7 +119,6 @@ async def upload_resume(
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {e}")
 
     # Save to history for authenticated user
-    user = get_current_user_required(request, db)
     entry = AnalysisHistory(
         user_id=user.id,
         filename=file.filename or "unknown",
@@ -290,8 +295,7 @@ def api_login(
 
 
 @app.get("/auth/me")
-def get_me(request: Request, db: Session = Depends(get_db)):
-    user = get_current_user_required(request, db)
+def get_me(user: User = Depends(get_current_user_required)):
     return {"id": user.id, "email": user.email, "name": user.name, "username": user.username}
 
 
@@ -300,8 +304,7 @@ def get_me(request: Request, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.get("/history")
-def get_history(request: Request, db: Session = Depends(get_db)):
-    user = get_current_user_required(request, db)
+def get_history(user: User = Depends(get_current_user_required), db: Session = Depends(get_db)):
     entries = (
         db.query(AnalysisHistory)
         .filter(AnalysisHistory.user_id == user.id)
@@ -323,8 +326,7 @@ def get_history(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/history/{entry_id}")
-def get_history_detail(entry_id: str, request: Request, db: Session = Depends(get_db)):
-    user = get_current_user_required(request, db)
+def get_history_detail(entry_id: str, user: User = Depends(get_current_user_required), db: Session = Depends(get_db)):
     entry = (
         db.query(AnalysisHistory)
         .filter(AnalysisHistory.id == entry_id, AnalysisHistory.user_id == user.id)
@@ -344,8 +346,7 @@ def get_history_detail(entry_id: str, request: Request, db: Session = Depends(ge
 
 
 @app.delete("/history/{entry_id}")
-def delete_history_entry(entry_id: str, request: Request, db: Session = Depends(get_db)):
-    user = get_current_user_required(request, db)
+def delete_history_entry(entry_id: str, user: User = Depends(get_current_user_required), db: Session = Depends(get_db)):
     entry = (
         db.query(AnalysisHistory)
         .filter(AnalysisHistory.id == entry_id, AnalysisHistory.user_id == user.id)

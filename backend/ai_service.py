@@ -8,9 +8,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# Provider configuration – Groq is primary (ultra-fast LPU), OpenRouter fallback
-# ---------------------------------------------------------------------------
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -18,7 +15,7 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Groq free-tier models (fastest inference available)
+
 GROQ_MODELS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
@@ -26,7 +23,7 @@ GROQ_MODELS = [
     "mixtral-8x7b-32768",
 ]
 
-# OpenRouter free models (fallback)
+
 OPENROUTER_MODELS = [
     "meta-llama/llama-3.3-70b-instruct:free",
     "google/gemma-4-31b-it:free",
@@ -159,7 +156,10 @@ def analyze_resume(resume_text: str, job_description: str) -> dict:
     ]
 
     last_error = None
+    failed_keys: set = set()
     for url, key, model in _providers():
+        if key in failed_keys:
+            continue
         try:
             resp = _call_api(url, key, model, messages)
         except requests.exceptions.Timeout:
@@ -173,8 +173,9 @@ def analyze_resume(resume_text: str, job_description: str) -> dict:
         if err:
             last_error = err
             if resp.status_code == 401:
-                # Bad key – skip all models for this provider
-                break
+                # Bad key – skip remaining models for this provider
+                failed_keys.add(key)
+                continue
             if resp.status_code == 429:
                 time.sleep(1)
             continue
@@ -207,7 +208,10 @@ def _call_ai_text(system_prompt: str, user_prompt: str) -> str:
     ]
 
     last_error = None
+    failed_keys: set = set()
     for url, key, model in _providers():
+        if key in failed_keys:
+            continue
         try:
             resp = _call_api(url, key, model, messages)
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
@@ -218,7 +222,8 @@ def _call_ai_text(system_prompt: str, user_prompt: str) -> str:
         if err:
             last_error = err
             if resp.status_code == 401:
-                break
+                failed_keys.add(key)
+                continue
             if resp.status_code == 429:
                 time.sleep(1)
             continue

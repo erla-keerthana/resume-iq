@@ -16,6 +16,9 @@ import pytesseract
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".jpg", ".jpeg", ".png"}
 
+MAX_IMAGE_PIXELS = 25_000_000
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
 
 def detect_file_type(filename: str | None) -> str:
     """Detect file type from the filename extension."""
@@ -93,6 +96,13 @@ def _image_to_pdf(file_bytes: bytes, output_path: str) -> str:
         f.write(file_bytes)
 
     image = Image.open(tmp_img)
+    width, height = image.size
+    if width * height > MAX_IMAGE_PIXELS:
+        os.remove(tmp_img)
+        raise ValueError(
+            f"Image too large ({width}x{height} pixels). "
+            f"Maximum is {MAX_IMAGE_PIXELS:,} pixels."
+        )
     # OCR the image to get text
     try:
         text = pytesseract.image_to_string(image)
@@ -178,6 +188,12 @@ _PROFILE_HEADERS = {
 }
 
 
+_ALLOWED_PROFILE_HOSTS = {
+    "linkedin.com", "www.linkedin.com",
+    "github.com", "www.github.com",
+}
+
+
 def fetch_profile_text(url: str) -> str:
     """Fetch public profile page and extract readable text."""
     parsed = urlparse(url)
@@ -188,14 +204,14 @@ def fetch_profile_text(url: str) -> str:
         parsed = urlparse(url)
         host = parsed.hostname or ""
 
-    is_linkedin = "linkedin.com" in host
-    is_github = "github.com" in host
-
-    if not is_linkedin and not is_github:
+    if host not in _ALLOWED_PROFILE_HOSTS:
         raise ValueError("Only LinkedIn and GitHub profile URLs are supported.")
 
+    is_linkedin = host in {"linkedin.com", "www.linkedin.com"}
+    is_github = host in {"github.com", "www.github.com"}
+
     try:
-        resp = requests.get(url, headers=_PROFILE_HEADERS, timeout=15, allow_redirects=True)
+        resp = requests.get(url, headers=_PROFILE_HEADERS, timeout=15, allow_redirects=False)
         resp.raise_for_status()
     except requests.RequestException as e:
         raise ValueError(f"Could not fetch profile: {e}")

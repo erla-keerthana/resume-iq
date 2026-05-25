@@ -5,14 +5,20 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 from dotenv import load_dotenv
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from database import get_db
 from models import User
 
 load_dotenv()
 
-JWT_SECRET = os.getenv("JWT_SECRET", "resumeiq-dev-secret-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET environment variable is not set. "
+        "Set a strong secret in backend/.env before starting the server."
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = 30
 
@@ -101,7 +107,9 @@ def verify_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-def get_current_user_optional(request: Request, db: Session) -> User | None:
+def get_current_user_optional(
+    request: Request, db: Session = Depends(get_db)
+) -> User | None:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return None
@@ -113,7 +121,9 @@ def get_current_user_optional(request: Request, db: Session) -> User | None:
     return db.query(User).filter(User.id == payload["sub"]).first()
 
 
-def get_current_user_required(request: Request, db: Session) -> User:
+def get_current_user_required(
+    request: Request, db: Session = Depends(get_db)
+) -> User:
     user = get_current_user_optional(request, db)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
