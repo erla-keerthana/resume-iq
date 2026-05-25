@@ -3,8 +3,6 @@
 	import { auth } from '$lib/stores.svelte';
 	import { getHistory, deleteHistoryEntry, getHistoryDetail } from '$lib/api';
 	import type { HistoryEntry, AnalysisResult } from '$lib/types';
-	import { onMount } from 'svelte';
-
 	let entries = $state<HistoryEntry[]>([]);
 	let loading = $state(true);
 	let error = $state('');
@@ -12,14 +10,18 @@
 	let selectedFilename = $state('');
 	let mounted = $state(false);
 	let deletingId = $state<string | null>(null);
+	let historyLoaded = false;
 
-	onMount(async () => {
+	$effect(() => {
+		if (!auth.ready) return;
 		mounted = true;
+		if (auth.isLoggedIn && !historyLoaded) {
+			historyLoaded = true;
+			loadHistory();
+		}
 		if (!auth.isLoggedIn) {
 			loading = false;
-			return;
 		}
-		await loadHistory();
 	});
 
 	async function loadHistory() {

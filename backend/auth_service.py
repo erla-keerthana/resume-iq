@@ -13,11 +13,12 @@ from models import User
 
 load_dotenv()
 
-JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_SECRET = (os.getenv("JWT_SECRET") or "").strip()
 if not JWT_SECRET:
     raise RuntimeError(
-        "JWT_SECRET environment variable is not set. "
-        "Set a strong secret in backend/.env before starting the server."
+        "JWT_SECRET environment variable is not set or empty. "
+        "Generate one with: python3 -c \"import secrets; print(secrets.token_urlsafe(64))\" "
+        "and set it in backend/.env before starting the server."
     )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = 30

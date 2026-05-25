@@ -1,10 +1,13 @@
 import asyncio
 import os
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from dotenv import load_dotenv
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy.orm import Session
 
 from file_service import process_file, fetch_profile_text
@@ -22,12 +25,16 @@ from auth_service import (
     signup_user,
     authenticate_user,
     get_current_user_required,
+    get_current_user_optional,
 )
 from pdf_export import generate_report_pdf
 
 load_dotenv()
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="ResumeIQ API")
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
 
 # Initialize database on startup
 @app.on_event("startup")
@@ -102,7 +109,9 @@ def health_check():
 # ---------------------------------------------------------------------------
 
 @app.post("/upload")
+@limiter.limit("10/minute")
 async def upload_resume(
+    request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
     user: User = Depends(get_current_user_required),
@@ -123,6 +132,7 @@ async def upload_resume(
         user_id=user.id,
         filename=file.filename or "unknown",
         job_description=job_description[:2000],
+        workflow_type="analysis",
         ats_score=result.get("ats_score", 0),
         match_score=result.get("match_score", 0),
         result_json=result,
@@ -138,9 +148,13 @@ async def upload_resume(
 # ---------------------------------------------------------------------------
 
 @app.post("/generate/cover-letter")
+@limiter.limit("10/minute")
 async def api_cover_letter(
+    request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     file_bytes = await _read_and_validate_file(file)
     resume_text = await _extract_text(file_bytes, file.filename)
@@ -150,7 +164,19 @@ async def api_cover_letter(
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    return {"cover_letter": letter}
+    result = {"cover_letter": letter}
+    if user:
+        entry = AnalysisHistory(
+            user_id=user.id,
+            filename=file.filename or "unknown",
+            job_description=job_description[:2000],
+            workflow_type="cover-letter",
+            result_json=result,
+        )
+        db.add(entry)
+        db.commit()
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -158,9 +184,13 @@ async def api_cover_letter(
 # ---------------------------------------------------------------------------
 
 @app.post("/generate/interview-questions")
+@limiter.limit("10/minute")
 async def api_interview_questions(
+    request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     file_bytes = await _read_and_validate_file(file)
     resume_text = await _extract_text(file_bytes, file.filename)
@@ -170,6 +200,17 @@ async def api_interview_questions(
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
+    if user:
+        entry = AnalysisHistory(
+            user_id=user.id,
+            filename=file.filename or "unknown",
+            job_description=job_description[:2000],
+            workflow_type="interview-questions",
+            result_json=questions,
+        )
+        db.add(entry)
+        db.commit()
+
     return questions
 
 
@@ -178,9 +219,13 @@ async def api_interview_questions(
 # ---------------------------------------------------------------------------
 
 @app.post("/generate/keyword-optimize")
+@limiter.limit("10/minute")
 async def api_keyword_optimize(
+    request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     file_bytes = await _read_and_validate_file(file)
     resume_text = await _extract_text(file_bytes, file.filename)
@@ -190,6 +235,17 @@ async def api_keyword_optimize(
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
+    if user:
+        entry = AnalysisHistory(
+            user_id=user.id,
+            filename=file.filename or "unknown",
+            job_description=job_description[:2000],
+            workflow_type="keyword-optimize",
+            result_json=result,
+        )
+        db.add(entry)
+        db.commit()
+
     return result
 
 
@@ -198,9 +254,13 @@ async def api_keyword_optimize(
 # ---------------------------------------------------------------------------
 
 @app.post("/generate/skill-gap")
+@limiter.limit("10/minute")
 async def api_skill_gap(
+    request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     file_bytes = await _read_and_validate_file(file)
     resume_text = await _extract_text(file_bytes, file.filename)
@@ -210,6 +270,17 @@ async def api_skill_gap(
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
+    if user:
+        entry = AnalysisHistory(
+            user_id=user.id,
+            filename=file.filename or "unknown",
+            job_description=job_description[:2000],
+            workflow_type="skill-gap",
+            result_json=result,
+        )
+        db.add(entry)
+        db.commit()
+
     return result
 
 
@@ -218,7 +289,9 @@ async def api_skill_gap(
 # ---------------------------------------------------------------------------
 
 @app.post("/export/pdf")
+@limiter.limit("10/minute")
 async def export_pdf(
+    request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
 ):
@@ -244,7 +317,9 @@ async def export_pdf(
 # ---------------------------------------------------------------------------
 
 @app.post("/parse/profile")
+@limiter.limit("10/minute")
 async def parse_profile(
+    request: Request,
     url: str = Form(...),
     job_description: str = Form(...),
 ):
@@ -266,7 +341,9 @@ async def parse_profile(
 # ---------------------------------------------------------------------------
 
 @app.post("/auth/signup")
+@limiter.limit("5/minute")
 def api_signup(
+    request: Request,
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
@@ -281,7 +358,9 @@ def api_signup(
 
 
 @app.post("/auth/login")
+@limiter.limit("5/minute")
 def api_login(
+    request: Request,
     email: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
@@ -317,6 +396,7 @@ def get_history(user: User = Depends(get_current_user_required), db: Session = D
             "id": e.id,
             "filename": e.filename,
             "job_description": e.job_description[:200],
+            "workflow_type": e.workflow_type or "analysis",
             "ats_score": e.ats_score,
             "match_score": e.match_score,
             "created_at": e.created_at.isoformat() if e.created_at else None,
@@ -338,6 +418,7 @@ def get_history_detail(entry_id: str, user: User = Depends(get_current_user_requ
         "id": entry.id,
         "filename": entry.filename,
         "job_description": entry.job_description,
+        "workflow_type": entry.workflow_type or "analysis",
         "ats_score": entry.ats_score,
         "match_score": entry.match_score,
         "result_json": entry.result_json,

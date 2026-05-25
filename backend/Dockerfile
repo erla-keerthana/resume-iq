@@ -12,6 +12,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Create non-root user and set ownership of writable dirs
+RUN useradd -r -s /bin/false appuser && \
+    mkdir -p /app/uploads && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
 ENV PORT=8001
 EXPOSE ${PORT}
 

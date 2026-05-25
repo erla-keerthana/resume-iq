@@ -1,6 +1,7 @@
 """Generate a PDF report from analysis results."""
 
 import io
+from xml.sax.saxutils import escape as _xml_escape
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -8,6 +9,11 @@ from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
 )
+
+
+def _esc(text: str) -> str:
+    """Escape text for safe use inside ReportLab Paragraph XML."""
+    return _xml_escape(str(text)) if text else ""
 
 
 def _score_color(score: int):
@@ -34,9 +40,9 @@ def generate_report_pdf(result: dict, filename: str = "resume") -> bytes:
 
     # Header
     elements.append(Paragraph("ResumeIQ Analysis Report", title_style))
-    elements.append(Paragraph(f"File: {filename}", subtitle_style))
+    elements.append(Paragraph(f"File: {_esc(filename)}", subtitle_style))
     if result.get("detected_role"):
-        elements.append(Paragraph(f"Detected Role: {result['detected_role']}", subtitle_style))
+        elements.append(Paragraph(f"Detected Role: {_esc(result['detected_role'])}", subtitle_style))
     elements.append(Spacer(1, 12))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e7eb")))
     elements.append(Spacer(1, 12))
@@ -69,41 +75,41 @@ def generate_report_pdf(result: dict, filename: str = "resume") -> bytes:
     # Summary
     if result.get("summary"):
         elements.append(Paragraph("Summary", heading_style))
-        elements.append(Paragraph(result["summary"], body_style))
+        elements.append(Paragraph(_esc(result["summary"]), body_style))
 
     # ATS Explanation
     if result.get("ats_explanation"):
         elements.append(Paragraph("ATS Analysis", heading_style))
-        elements.append(Paragraph(result["ats_explanation"], body_style))
+        elements.append(Paragraph(_esc(result["ats_explanation"]), body_style))
 
     # Match Explanation
     if result.get("match_explanation"):
         elements.append(Paragraph("Match Analysis", heading_style))
-        elements.append(Paragraph(result["match_explanation"], body_style))
+        elements.append(Paragraph(_esc(result["match_explanation"]), body_style))
 
     # Keywords
     matched = result.get("matched_keywords", [])
     missing = result.get("missing_keywords", [])
     if matched:
         elements.append(Paragraph("Matched Keywords", heading_style))
-        elements.append(Paragraph(", ".join(matched), body_style))
+        elements.append(Paragraph(_esc(", ".join(str(k) for k in matched)), body_style))
     if missing:
         elements.append(Paragraph("Missing Keywords", heading_style))
-        elements.append(Paragraph(", ".join(missing), body_style))
+        elements.append(Paragraph(_esc(", ".join(str(k) for k in missing)), body_style))
 
     # Suggestions
     suggestions = result.get("suggestions", [])
     if suggestions:
         elements.append(Paragraph("Suggestions", heading_style))
         for s in suggestions:
-            elements.append(Paragraph(f"&bull; {s}", bullet_style))
+            elements.append(Paragraph(f"&bull; {_esc(str(s))}", bullet_style))
 
     # Weak points
     weak = result.get("weak_points", [])
     if weak:
         elements.append(Paragraph("Weak Points", heading_style))
         for w in weak:
-            elements.append(Paragraph(f"&bull; {w}", bullet_style))
+            elements.append(Paragraph(f"&bull; {_esc(str(w))}", bullet_style))
 
     elements.append(Spacer(1, 24))
     elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d1d5db")))

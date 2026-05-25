@@ -18,7 +18,7 @@
 		KeywordOptimizeResult,
 		SkillGapResult
 	} from '$lib/types';
-	import { tick, onMount } from 'svelte';
+	import { tick } from 'svelte';
 
 	const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.jpg', '.jpeg', '.png'];
 	const ACCEPTED_TYPES = ACCEPTED_EXTENSIONS.join(',');
@@ -60,12 +60,13 @@
 			: file !== null && jobDescription.trim().length > 0 && !loading
 	);
 
-	onMount(() => {
+	$effect(() => {
+		if (!auth.ready) return;
 		if (!auth.isLoggedIn) {
 			goto(`${base}/login`);
-			return;
+		} else {
+			requestAnimationFrame(() => { mounted = true; });
 		}
-		requestAnimationFrame(() => { mounted = true; });
 	});
 
 	function validateFile(f: File): string | null {

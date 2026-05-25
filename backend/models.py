@@ -32,6 +32,7 @@ class AnalysisHistory(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     filename = Column(String, nullable=False)
     job_description = Column(Text, nullable=False)
+    workflow_type = Column(String, default="analysis")
     ats_score = Column(Integer, default=0)
     match_score = Column(Integer, default=0)
     result_json = Column(JSON, nullable=False)

@@ -1,3 +1,4 @@
+
 services:
   backend:
     build:
@@ -9,9 +10,8 @@ services:
       - ./backend/.env
     environment:
       - PORT=8001
-      - ALLOWED_ORIGINS=http://10.10.0.36:5174
+      - ALLOWED_ORIGINS=${PUBLIC_URL:-http://localhost:5174}
     volumes:
-      - backend-data:/app/data
       - backend-uploads:/app/uploads
     restart: unless-stopped
 
@@ -24,11 +24,10 @@ services:
     environment:
       - PORT=5174
       - BACKEND_URL=http://backend:8001
-      - ORIGIN=http://10.10.0.36:5174
+      - ORIGIN=${PUBLIC_URL:-http://localhost:5174}
     depends_on:
       - backend
     restart: unless-stopped
 
 volumes:
-  backend-data:
   backend-uploads:

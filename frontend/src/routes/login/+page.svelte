@@ -3,7 +3,6 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores.svelte';
 	import { login } from '$lib/api';
-	import { onMount } from 'svelte';
 
 	let email = $state('');
 	let password = $state('');
@@ -11,11 +10,13 @@
 	let error = $state('');
 	let mounted = $state(false);
 
-	onMount(() => {
-		if (auth.isLoggedIn) {
+	$effect(() => {
+		if (auth.ready && auth.isLoggedIn) {
 			goto(`${base}/dashboard`);
 		}
-		requestAnimationFrame(() => { mounted = true; });
+		if (auth.ready && !auth.isLoggedIn) {
+			requestAnimationFrame(() => { mounted = true; });
+		}
 	});
 
 	async function handleLogin(e: Event) {
@@ -34,7 +35,7 @@
 		loading = true;
 		try {
 			const result = await login(email.trim(), password);
-			auth.login(result.token, result.user);
+			auth.login(result.user);
 			goto(`${base}/dashboard`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Login failed. Please try again.';
@@ -49,6 +50,7 @@
 	<title>Login - ResumeIQ</title>
 </svelte:head>
 
+{#if auth.ready && !auth.isLoggedIn}
 <div class="page" class:mounted>
 	<!-- Decorative glow orbs -->
 	<div class="glow glow-1"></div>
@@ -126,6 +128,7 @@
 		</div>
 	</main>
 </div>
+{/if}
 
 <style>
 	.page {

@@ -3,6 +3,7 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { auth, theme } from '$lib/stores.svelte';
+	import { logout } from '$lib/api';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 
@@ -47,7 +48,7 @@
 					{#if auth.isLoggedIn}
 						<div class="nav-user">
 							<span class="nav-username">{auth.user?.username || auth.user?.name || 'User'}</span>
-							<button class="nav-link logout-btn" onclick={() => { auth.logout(); goto(`${base}/login`); }}>Logout</button>
+							<button class="nav-link logout-btn" onclick={async () => { await logout(); auth.logout(); goto(`${base}/login`); }}>Logout</button>
 						</div>
 					{:else}
 						<a href="{base}/login" class="nav-link" class:active={currentPath.includes('/login')}>Login</a>

@@ -7,17 +7,13 @@ import type {
 	KeywordOptimizeResult,
 	SkillGapResult,
 	HistoryEntry,
-	HistoryDetail
+	HistoryDetail,
+	User
 } from './types';
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers — cookie-based auth: no Authorization header needed from browser JS
 // ---------------------------------------------------------------------------
-
-function authHeaders(): Record<string, string> {
-	const token = auth.token;
-	return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 async function handleResponse<T>(response: Response): Promise<T> {
 	if (!response.ok) {
@@ -48,7 +44,6 @@ async function postForm<T>(path: string, body: FormData, signal?: AbortSignal): 
 		response = await fetch(`${base}/api${path}`, {
 			method: 'POST',
 			body,
-			headers: authHeaders(),
 			signal
 		});
 	} catch (err) {
@@ -60,14 +55,13 @@ async function postForm<T>(path: string, body: FormData, signal?: AbortSignal): 
 }
 
 async function getJson<T>(path: string): Promise<T> {
-	const response = await fetch(`${base}/api${path}`, { headers: authHeaders() });
+	const response = await fetch(`${base}/api${path}`);
 	return handleResponse<T>(response);
 }
 
 async function deleteReq(path: string): Promise<void> {
 	const response = await fetch(`${base}/api${path}`, {
-		method: 'DELETE',
-		headers: authHeaders()
+		method: 'DELETE'
 	});
 	if (!response.ok) {
 		const body = await response.json().catch(() => null);
@@ -155,8 +149,7 @@ export async function exportPdf(file: File, jobDescription: string): Promise<Blo
 	const fd = makeFormData(file, jobDescription);
 	const response = await fetch(`${base}/api/export/pdf`, {
 		method: 'POST',
-		body: fd,
-		headers: authHeaders()
+		body: fd
 	});
 	if (!response.ok) {
 		const body = await response.json().catch(() => null);
@@ -194,20 +187,38 @@ export async function deleteHistoryEntry(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Auth
+// Session Validation — check if httpOnly cookie holds a valid session
 // ---------------------------------------------------------------------------
 
-export async function login(email: string, password: string): Promise<{ token: string; user: { id: string; email: string; name: string; username: string } }> {
+export async function validateSession(): Promise<User | null> {
+	try {
+		const response = await fetch(`${base}/api/auth/me`);
+		if (!response.ok) return null;
+		return response.json();
+	} catch {
+		return null;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Auth — token is set/cleared via httpOnly cookie by the server proxy
+// ---------------------------------------------------------------------------
+
+export async function login(email: string, password: string): Promise<{ user: { id: string; email: string; name: string; username: string } }> {
 	const fd = new FormData();
 	fd.append('email', email);
 	fd.append('password', password);
 	return postForm('/auth/login', fd);
 }
 
-export async function signup(username: string, email: string, password: string): Promise<{ token: string; user: { id: string; email: string; name: string; username: string } }> {
+export async function signup(username: string, email: string, password: string): Promise<{ user: { id: string; email: string; name: string; username: string } }> {
 	const fd = new FormData();
 	fd.append('username', username);
 	fd.append('email', email);
 	fd.append('password', password);
 	return postForm('/auth/signup', fd);
+}
+
+export async function logout(): Promise<void> {
+	await fetch(`${base}/api/auth/logout`, { method: 'POST' }).catch(() => {});
 }
