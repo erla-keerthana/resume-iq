@@ -1,0 +1,33 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# Uploads / temp files
+backend/uploads/
+
+# Database
+*.db
+
+# Node / Frontend
+node_modules/
+.svelte-kit/
+build/
+.output/
+.vercel/
+.netlify/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
